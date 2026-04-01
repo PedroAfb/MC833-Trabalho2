@@ -1,0 +1,105 @@
+services:
+  roteador:
+    build: .
+    container_name: roteador
+    tty: true
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    sysctls:
+      - net.ipv4.ip_forward=1 # Ativa o encaminhamento de pacotes. Ou seja se chegar um pacote que não é pra esse container docker ele redireciona.
+    networks:
+      rede_a:
+        ipv4_address: 10.0.1.254
+      rede_b:
+        ipv4_address: 10.0.2.254
+    command: bash -c "apt-get update; tail -f /dev/null"
+    volumes:
+      - "/tmp/docker_lab_${USER}/roteador:/app"
+    working_dir: /app
+
+  servidor:
+    build: .
+    container_name: servidor
+    tty: true
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    networks:
+      rede_a:
+        ipv4_address: 10.0.1.2
+    # Mantivemos as suas rotas e adicionamos a instalação/inicialização dos serviços
+    command: >
+      bash -c "apt update; 
+      DEBIAN_FRONTEND=noninteractive apt install -y nginx mariadb-server telnetd xinetd;
+      echo '[mysqld]' > /etc/mysql/mariadb.conf.d/99-open.cnf;
+      echo 'bind-address = 10.0.1.2' >> /etc/mysql/mariadb.conf.d/99-open.cnf;
+
+      id -u aluno || useradd -m -s /bin/bash aluno;
+      echo 'aluno:lab123' | chpasswd;
+
+      echo 'service telnet' > /etc/xinetd.d/telnet;
+      echo '{' >> /etc/xinetd.d/telnet;
+      echo ' disable = no' >> /etc/xinetd.d/telnet;
+      echo ' flags = REUSE' >> /etc/xinetd.d/telnet;
+      echo ' socket_type = stream' >> /etc/xinetd.d/telnet;
+      echo ' wait = no' >> /etc/xinetd.d/telnet;
+      echo ' user = root' >> /etc/xinetd.d/telnet;
+      echo ' server = /usr/sbin/in.telnetd' >> /etc/xinetd.d/telnet;
+      echo ' log_on_failure += USERID' >> /etc/xinetd.d/telnet;
+      echo '}' >> /etc/xinetd.d/telnet;
+
+      service xinetd start;
+      service nginx start;
+      service mariadb start;
+      mariadb -e \"CREATE USER IF NOT EXISTS 'aluno'@'%' IDENTIFIED BY 'lab123'; GRANT ALL PRIVILEGES ON *.* TO 'aluno'@'%'; FLUSH PRIVILEGES;\";
+      
+      ip route del default; 
+      ip route add default via 10.0.1.254; 
+      tail -f /dev/null"
+    volumes:
+      - "/tmp/docker_lab_${USER}/servidor:/app"
+    working_dir: /app
+
+  cliente:
+    build: .
+    container_name: client
+    tty: true
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    networks:
+      rede_b:
+        ipv4_address: 10.0.2.2
+    # Por padrão o docker tentar ser o gateway dos containers, para o nosso ambiente funcionar nós mudamos para o getway ser o nosso roteador ;)
+    command: bash -c "apt update; apt install -y curl telnet mariadb-client iputils-ping; ip route del default; ip route add default via 10.0.2.254; tail -f /dev/null"
+    volumes:
+      - "/tmp/docker_lab_${USER}/cliente:/app"
+    working_dir: /app
+
+  badguy:
+    build:
+      context: .
+      dockerfile: Dockerfile-badguy
+    container_name: badguy
+    tty: true
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    networks:
+      rede_b:
+        ipv4_address: 10.0.2.42
+    command: bash -c "ip route del default; ip route add default via 10.0.2.254; tail -f /dev/null"
+    volumes:
+      - "/tmp/docker_lab_${USER}/badguy:/app"
+    working_dir: /app
+
+networks:
+  rede_a:
+    ipam:
+      config:
+        - subnet: 10.0.1.0/24
+  rede_b:
+    ipam:
+      config:
+        - subnet: 10.0.2.0/24
