@@ -13,7 +13,7 @@ services:
         ipv4_address: 10.0.1.254
       rede_b:
         ipv4_address: 10.0.2.254
-    command: bash -c "apt-get update; tail -f /dev/null"
+    command: bash -c "python3 /app/roteador.py"
     volumes:
       - "/tmp/docker_lab_${USER}/roteador:/app"
     working_dir: /app
