@@ -6,6 +6,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y \
     python3 python3-pip \
     iproute2 iputils-ping tcpdump \
+    iptables \
     nginx mysql-server telnetd xinetd ngrep  -y \
     && rm -rf /var/lib/apt/lists/*
 
